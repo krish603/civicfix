@@ -8,6 +8,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { SearchProvider } from "./contexts/SearchContext";
+import { AuthProvider } from "./contexts/AuthContext";
+import { AuthDialog } from "./components/AuthDialog";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
 import MyReports from "./pages/MyReports";
@@ -24,19 +26,22 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <SearchProvider>
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/explore" element={<Explore />} />
-              <Route path="/my-reports" element={<MyReports />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/issue/:id" element={<Issue />} />
-              <Route path="/profile/:userId?" element={<Profile />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Layout>
-        </SearchProvider>
+        <AuthProvider>
+          <SearchProvider>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/explore" element={<Explore />} />
+                <Route path="/my-reports" element={<MyReports />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/issue/:id" element={<Issue />} />
+                <Route path="/profile/:userId?" element={<Profile />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Layout>
+            <AuthDialog />
+          </SearchProvider>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

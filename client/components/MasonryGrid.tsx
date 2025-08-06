@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Badge } from "./ui/badge";
+import { useAuth } from "../contexts/AuthContext";
 
 interface MasonryItem {
   id: string;
@@ -23,6 +24,16 @@ const statusConfig = {
 };
 
 export function MasonryGrid({ items, onItemClick }: MasonryGridProps) {
+  const { isAuthenticated, openAuthDialog } = useAuth();
+
+  const handleItemClick = (id: string) => {
+    if (!isAuthenticated) {
+      openAuthDialog('signin');
+      return;
+    }
+    onItemClick(id);
+  };
+
   return (
     <div className="columns-2 sm:columns-3 lg:columns-4 gap-2 md:gap-4 space-y-2 md:space-y-4">
       {items.map((item) => {
@@ -32,7 +43,7 @@ export function MasonryGrid({ items, onItemClick }: MasonryGridProps) {
           <div
             key={item.id}
             className="break-inside-avoid cursor-pointer group"
-            onClick={() => onItemClick(item.id)}
+            onClick={() => handleItemClick(item.id)}
           >
             <div className="relative overflow-hidden rounded-lg bg-card border hover:shadow-lg transition-all duration-300 group-hover:scale-[1.02]">
               <div className="relative">

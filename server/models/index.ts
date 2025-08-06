@@ -1,10 +1,13 @@
 // Export all models
-export { User, UserRole, UserStatus } from './User';
-export { Category } from './Category';
-export { Issue, IssueStatus, IssuePriority } from './Issue';
-export { Vote, VoteType } from './Vote';
-export { Comment } from './Comment';
-export { Department } from './Department';
+export { default as User } from './User';
+export { default as Issue } from './Issue';
+export { default as Vote } from './Vote';
+export { default as Comment } from './Comment';
+export { default as Category } from './Category';
 
-// Export database connection
-export { connectDatabase, disconnectDatabase } from '../config/database'; 
+// Export interfaces
+export type { IUser } from './User';
+export type { IIssue } from './Issue';
+export type { IVote } from './Vote';
+export type { IComment } from './Comment';
+export type { ICategory } from './Category';

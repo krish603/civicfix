@@ -7,6 +7,10 @@ import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Badge } from "./ui/badge";
+import { issuesApi } from "../lib/api";
+import { useToast } from "../hooks/use-toast";
+import { useAuth } from "../contexts/AuthContext";
+import { useIssues } from "../hooks/useIssues";
 
 const predefinedTags = [
   "streetlights", "potholes", "safety", "infrastructure", "parking", 
@@ -29,6 +33,10 @@ interface ReportIssueDialogProps {
 
 export function ReportIssueDialog({ children }: ReportIssueDialogProps) {
   const [open, setOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+  const { isAuthenticated, openAuthDialog } = useAuth();
+  const { refetch } = useIssues();
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -61,20 +69,65 @@ export function ReportIssueDialog({ children }: ReportIssueDialogProps) {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission here
-    console.log("Submitting issue:", formData);
-    setOpen(false);
-    // Reset form
-    setFormData({
-      title: "",
-      description: "",
-      location: "",
-      category: "",
-      hashtags: [],
-      image: null
-    });
+    
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to report an issue.",
+        variant: "destructive",
+      });
+      setOpen(false);
+      openAuthDialog('signin');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      const issueData = {
+        title: formData.title,
+        description: formData.description,
+        locationAddress: formData.location,
+        categoryName: formData.category, // Send as categoryName instead of categoryId
+        tags: formData.hashtags,
+        priority: 'medium' // Default priority
+      };
+  
+      const response = await issuesApi.createIssue(issueData);
+      
+      if (response.success) {
+        toast({
+          title: "Issue reported successfully!",
+          description: "Your issue has been submitted and is under review.",
+        });
+        setOpen(false);
+        // Reset form
+        setFormData({
+          title: "",
+          description: "",
+          location: "",
+          category: "",
+          hashtags: [],
+          image: null
+        });
+        // Refetch the issues list to show the new issue
+        refetch();
+      } else {
+        throw new Error(response.message || 'Failed to create issue');
+      }
+    } catch (error: any) {
+      console.error('Error creating issue:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to submit issue. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isValid = formData.title && formData.description && formData.location && formData.category;
@@ -240,10 +293,10 @@ export function ReportIssueDialog({ children }: ReportIssueDialogProps) {
             </Button>
             <Button
               type="submit"
-              disabled={!isValid}
+              disabled={!isValid || isSubmitting}
               className="flex-1"
             >
-              Submit Report
+              {isSubmitting ? "Submitting..." : "Submit Report"}
             </Button>
           </div>
         </form>

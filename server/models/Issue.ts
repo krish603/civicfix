@@ -1,44 +1,19 @@
-import mongoose, { Document, Schema } from 'mongoose';
-
-export enum IssueStatus {
-  PENDING = 'pending',
-  UNDER_REVIEW = 'under_review',
-  APPROVED = 'approved',
-  IN_PROGRESS = 'in_progress',
-  RESOLVED = 'resolved',
-  REJECTED = 'rejected',
-  DUPLICATE = 'duplicate'
-}
-
-export enum IssuePriority {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-  CRITICAL = 'critical'
-}
-
-export interface ILocation {
-  address: string;
-  latitude?: number;
-  longitude?: number;
-}
-
-export interface IMetadata {
-  [key: string]: any;
-}
+import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IIssue extends Document {
   title: string;
   description: string;
-  categoryId?: mongoose.Types.ObjectId;
-  status: IssueStatus;
-  priority: IssuePriority;
-  location: ILocation;
-  wardId?: mongoose.Types.ObjectId;
-  constituencyId?: mongoose.Types.ObjectId;
-  reportedBy: mongoose.Types.ObjectId;
-  assignedTo?: mongoose.Types.ObjectId;
-  assignedDepartmentId?: mongoose.Types.ObjectId;
+  categoryId?: Types.ObjectId;
+  status: 'pending' | 'under_review' | 'approved' | 'in_progress' | 'resolved' | 'rejected' | 'duplicate';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  locationAddress: string;
+  latitude?: number;
+  longitude?: number;
+  wardId?: Types.ObjectId;
+  constituencyId?: Types.ObjectId;
+  reportedBy: Types.ObjectId;
+  assignedTo?: Types.ObjectId;
+  assignedDepartmentId?: Types.ObjectId;
   estimatedCost?: number;
   actualCost?: number;
   estimatedCompletionDate?: Date;
@@ -52,42 +27,32 @@ export interface IIssue extends Document {
   isFeatured: boolean;
   isUrgent: boolean;
   tags: string[];
-  metadata?: IMetadata;
+  images: {
+    url: string;
+    thumbnailUrl?: string;
+    altText?: string;
+    fileSize?: number;
+    fileType?: string;
+    isPrimary: boolean;
+  }[];
+  metadata?: Record<string, any>;
   resolvedAt?: Date;
-  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const locationSchema = new Schema<ILocation>({
-  address: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  latitude: {
-    type: Number,
-    min: -90,
-    max: 90
-  },
-  longitude: {
-    type: Number,
-    min: -180,
-    max: 180
-  }
-});
-
-const issueSchema = new Schema<IIssue>({
+const IssueSchema = new Schema<IIssue>({
   title: {
     type: String,
-    required: true,
+    required: [true, 'Title is required'],
     trim: true,
-    maxlength: 255
+    maxlength: [200, 'Title cannot exceed 200 characters']
   },
   description: {
     type: String,
-    required: true,
-    trim: true
+    required: [true, 'Description is required'],
+    trim: true,
+    maxlength: [2000, 'Description cannot exceed 2000 characters']
   },
   categoryId: {
     type: Schema.Types.ObjectId,
@@ -95,17 +60,28 @@ const issueSchema = new Schema<IIssue>({
   },
   status: {
     type: String,
-    enum: Object.values(IssueStatus),
-    default: IssueStatus.PENDING
+    enum: ['pending', 'under_review', 'approved', 'in_progress', 'resolved', 'rejected', 'duplicate'],
+    default: 'pending'
   },
   priority: {
     type: String,
-    enum: Object.values(IssuePriority),
-    default: IssuePriority.MEDIUM
+    enum: ['low', 'medium', 'high', 'critical'],
+    default: 'medium'
   },
-  location: {
-    type: locationSchema,
-    required: true
+  locationAddress: {
+    type: String,
+    required: [true, 'Location is required'],
+    trim: true
+  },
+  latitude: {
+    type: Number,
+    min: [-90, 'Invalid latitude'],
+    max: [90, 'Invalid latitude']
+  },
+  longitude: {
+    type: Number,
+    min: [-180, 'Invalid longitude'],
+    max: [180, 'Invalid longitude']
   },
   wardId: {
     type: Schema.Types.ObjectId,
@@ -130,42 +106,38 @@ const issueSchema = new Schema<IIssue>({
   },
   estimatedCost: {
     type: Number,
-    min: 0
+    min: [0, 'Cost cannot be negative']
   },
   actualCost: {
     type: Number,
-    min: 0
+    min: [0, 'Cost cannot be negative']
   },
-  estimatedCompletionDate: {
-    type: Date
-  },
-  actualCompletionDate: {
-    type: Date
-  },
+  estimatedCompletionDate: Date,
+  actualCompletionDate: Date,
   upvotesCount: {
     type: Number,
     default: 0,
-    min: 0
+    min: [0, 'Upvotes count cannot be negative']
   },
   downvotesCount: {
     type: Number,
     default: 0,
-    min: 0
+    min: [0, 'Downvotes count cannot be negative']
   },
   commentsCount: {
     type: Number,
     default: 0,
-    min: 0
+    min: [0, 'Comments count cannot be negative']
   },
   viewsCount: {
     type: Number,
     default: 0,
-    min: 0
+    min: [0, 'Views count cannot be negative']
   },
   sharesCount: {
     type: Number,
     default: 0,
-    min: 0
+    min: [0, 'Shares count cannot be negative']
   },
   isAnonymous: {
     type: Boolean,
@@ -181,46 +153,61 @@ const issueSchema = new Schema<IIssue>({
   },
   tags: [{
     type: String,
-    trim: true
+    trim: true,
+    lowercase: true
+  }],
+  images: [{
+    url: {
+      type: String,
+      required: true
+    },
+    thumbnailUrl: String,
+    altText: String,
+    fileSize: Number,
+    fileType: String,
+    isPrimary: {
+      type: Boolean,
+      default: false
+    }
   }],
   metadata: {
     type: Schema.Types.Mixed
   },
-  resolvedAt: {
-    type: Date
-  },
-  deletedAt: {
-    type: Date
-  }
+  resolvedAt: Date
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
-// Indexes
-issueSchema.index({ status: 1 });
-issueSchema.index({ categoryId: 1 });
-issueSchema.index({ 'location.latitude': 1, 'location.longitude': 1 });
-issueSchema.index({ createdAt: -1 });
-issueSchema.index({ reportedBy: 1 });
-issueSchema.index({ wardId: 1 });
-issueSchema.index({ priority: 1 });
-issueSchema.index({ isFeatured: 1 });
-issueSchema.index({ isUrgent: 1 });
-issueSchema.index({ tags: 1 });
+// Indexes for performance
+IssueSchema.index({ status: 1 });
+IssueSchema.index({ priority: 1 });
+IssueSchema.index({ reportedBy: 1 });
+IssueSchema.index({ createdAt: -1 });
+IssueSchema.index({ locationAddress: 'text', title: 'text', description: 'text' });
+IssueSchema.index({ latitude: 1, longitude: 1 });
+IssueSchema.index({ tags: 1 });
+IssueSchema.index({ upvotesCount: -1 });
 
-// Text search index
-issueSchema.index({
-  title: 'text',
-  description: 'text',
-  'location.address': 'text'
-});
-
-// Virtual for vote difference
-issueSchema.virtual('voteDifference').get(function() {
+// Virtual for total votes
+IssueSchema.virtual('totalVotes').get(function() {
   return this.upvotesCount - this.downvotesCount;
 });
 
-// Ensure virtuals are included in JSON
-issueSchema.set('toJSON', { virtuals: true });
+// Virtual for vote score (upvotes - downvotes)
+IssueSchema.virtual('voteScore').get(function() {
+  const total = this.upvotesCount + this.downvotesCount;
+  if (total === 0) return 0;
+  return (this.upvotesCount / total) * 100;
+});
 
-export const Issue = mongoose.model<IIssue>('Issue', issueSchema); 
+// Pre-save middleware to set resolvedAt when status changes to resolved
+IssueSchema.pre('save', function(next) {
+  if (this.isModified('status') && this.status === 'resolved' && !this.resolvedAt) {
+    this.resolvedAt = new Date();
+  }
+  next();
+});
+
+export default mongoose.model<IIssue>('Issue', IssueSchema);

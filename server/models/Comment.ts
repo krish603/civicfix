@@ -1,21 +1,20 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IComment extends Document {
-  issueId: mongoose.Types.ObjectId;
-  userId: mongoose.Types.ObjectId;
-  parentId?: mongoose.Types.ObjectId;
+  issueId: Types.ObjectId;
+  userId: Types.ObjectId;
+  parentId?: Types.ObjectId;
   content: string;
   isOfficial: boolean;
   isSolution: boolean;
   likesCount: number;
   isEdited: boolean;
   editedAt?: Date;
-  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const commentSchema = new Schema<IComment>({
+const CommentSchema = new Schema<IComment>({
   issueId: {
     type: Schema.Types.ObjectId,
     ref: 'Issue',
@@ -28,13 +27,14 @@ const commentSchema = new Schema<IComment>({
   },
   parentId: {
     type: Schema.Types.ObjectId,
-    ref: 'Comment'
+    ref: 'Comment',
+    default: null
   },
   content: {
     type: String,
-    required: true,
+    required: [true, 'Comment content is required'],
     trim: true,
-    maxlength: 2000
+    maxlength: [1000, 'Comment cannot exceed 1000 characters']
   },
   isOfficial: {
     type: Boolean,
@@ -47,38 +47,55 @@ const commentSchema = new Schema<IComment>({
   likesCount: {
     type: Number,
     default: 0,
-    min: 0
+    min: [0, 'Likes count cannot be negative']
   },
   isEdited: {
     type: Boolean,
     default: false
   },
-  editedAt: {
-    type: Date
-  },
-  deletedAt: {
-    type: Date
-  }
+  editedAt: Date
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 // Indexes
-commentSchema.index({ issueId: 1 });
-commentSchema.index({ userId: 1 });
-commentSchema.index({ parentId: 1 });
-commentSchema.index({ createdAt: -1 });
-commentSchema.index({ isOfficial: 1 });
-commentSchema.index({ isSolution: 1 });
+CommentSchema.index({ issueId: 1, createdAt: -1 });
+CommentSchema.index({ userId: 1 });
+CommentSchema.index({ parentId: 1 });
 
 // Virtual for replies
-commentSchema.virtual('replies', {
+CommentSchema.virtual('replies', {
   ref: 'Comment',
   localField: '_id',
   foreignField: 'parentId'
 });
 
-// Ensure virtuals are included in JSON
-commentSchema.set('toJSON', { virtuals: true });
+// Pre-save middleware to set editedAt when content is modified
+CommentSchema.pre('save', function(next) {
+  if (this.isModified('content') && !this.isNew) {
+    this.isEdited = true;
+    this.editedAt = new Date();
+  }
+  next();
+});
 
-export const Comment = mongoose.model<IComment>('Comment', commentSchema); 
+// Update issue comment count when comment is created/deleted
+CommentSchema.post('save', async function() {
+  if (this.isNew) {
+    await mongoose.model('Issue').findByIdAndUpdate(
+      this.issueId,
+      { $inc: { commentsCount: 1 } }
+    );
+  }
+});
+
+CommentSchema.post('remove', async function() {
+  await mongoose.model('Issue').findByIdAndUpdate(
+    this.issueId,
+    { $inc: { commentsCount: -1 } }
+  );
+});
+
+export default mongoose.model<IComment>('Comment', CommentSchema);

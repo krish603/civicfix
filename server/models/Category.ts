@@ -1,9 +1,9 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface ICategory extends Document {
   name: string;
   description?: string;
-  parentId?: mongoose.Types.ObjectId;
+  parentId?: Types.ObjectId;
   iconName?: string;
   colorHex?: string;
   displayOrder: number;
@@ -12,34 +12,31 @@ export interface ICategory extends Document {
   updatedAt: Date;
 }
 
-const categorySchema = new Schema<ICategory>({
+const CategorySchema = new Schema<ICategory>({
   name: {
     type: String,
-    required: true,
+    required: [true, 'Category name is required'],
     trim: true,
-    maxlength: 100
+    maxlength: [100, 'Category name cannot exceed 100 characters'],
+    unique: true
   },
   description: {
     type: String,
-    trim: true
+    trim: true,
+    maxlength: [500, 'Description cannot exceed 500 characters']
   },
   parentId: {
     type: Schema.Types.ObjectId,
-    ref: 'Category'
+    ref: 'Category',
+    default: null
   },
   iconName: {
     type: String,
-    maxlength: 50
+    trim: true
   },
   colorHex: {
     type: String,
-    maxlength: 7,
-    validate: {
-      validator: function(v: string) {
-        return /^#[0-9A-F]{6}$/i.test(v);
-      },
-      message: 'Color must be a valid hex color (e.g., #FF0000)'
-    }
+    match: [/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/, 'Please enter a valid hex color']
   },
   displayOrder: {
     type: Number,
@@ -50,23 +47,28 @@ const categorySchema = new Schema<ICategory>({
     default: true
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 // Indexes
-categorySchema.index({ parentId: 1 });
-categorySchema.index({ displayOrder: 1 });
-categorySchema.index({ isActive: 1 });
-categorySchema.index({ name: 1 });
+CategorySchema.index({ parentId: 1, displayOrder: 1 });
+CategorySchema.index({ isActive: 1 });
 
-// Virtual for children categories
-categorySchema.virtual('children', {
+// Virtual for subcategories
+CategorySchema.virtual('subcategories', {
   ref: 'Category',
   localField: '_id',
   foreignField: 'parentId'
 });
 
-// Ensure virtuals are included in JSON
-categorySchema.set('toJSON', { virtuals: true });
+// Virtual for parent category
+CategorySchema.virtual('parent', {
+  ref: 'Category',
+  localField: 'parentId',
+  foreignField: '_id',
+  justOne: true
+});
 
-export const Category = mongoose.model<ICategory>('Category', categorySchema); 
+export default mongoose.model<ICategory>('Category', CategorySchema);

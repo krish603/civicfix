@@ -9,40 +9,38 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from "./ui/dropdown-menu";
-
-const mockUser = {
-  name: "Sarah Johnson",
-  email: "sarah.johnson@email.com",
-  avatar: "/placeholder.svg",
-  role: "Community Champion"
-};
+import { useAuth } from "../contexts/AuthContext";
 
 export function ProfileDropdown() {
+  const { user, logout } = useAuth();
+
+  if (!user) return null;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="rounded-full">
           <Avatar className="h-8 w-8">
-            <AvatarImage src={mockUser.avatar} />
-            <AvatarFallback>{mockUser.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+            <AvatarImage src={user.avatar} />
+            <AvatarFallback>{user.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      
+
       <DropdownMenuContent align="end" className="w-56 p-2">
         {/* User Info */}
         <div className="p-2 mb-2">
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10">
-              <AvatarImage src={mockUser.avatar} />
-              <AvatarFallback>{mockUser.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+              <AvatarImage src={user.avatar} />
+              <AvatarFallback>{user.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm truncate">{mockUser.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{mockUser.email}</p>
+              <p className="font-medium text-sm truncate">{user.name}</p>
+              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               <div className="flex items-center gap-1 mt-1">
                 <Award className="h-3 w-3 text-primary" />
-                <span className="text-xs text-primary">{mockUser.role}</span>
+                <span className="text-xs text-primary capitalize">{user.role}</span>
               </div>
             </div>
           </div>
@@ -74,7 +72,10 @@ export function ProfileDropdown() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive">
+        <DropdownMenuItem
+          className="cursor-pointer text-destructive focus:text-destructive"
+          onClick={logout}
+        >
           <LogOut className="h-4 w-4 mr-3" />
           <span>Sign Out</span>
         </DropdownMenuItem>

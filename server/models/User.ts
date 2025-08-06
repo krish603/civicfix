@@ -1,30 +1,17 @@
-import mongoose, { Document, Schema } from 'mongoose';
-
-export enum UserRole {
-  CITIZEN = 'citizen',
-  MODERATOR = 'moderator',
-  ADMIN = 'admin',
-  SUPER_ADMIN = 'super_admin'
-}
-
-export enum UserStatus {
-  ACTIVE = 'active',
-  SUSPENDED = 'suspended',
-  BANNED = 'banned',
-  DELETED = 'deleted'
-}
+import mongoose, { Schema, Document } from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 export interface IUser extends Document {
   email: string;
-  passwordHash: string;
+  password: string;
   name: string;
-  avatarUrl?: string;
+  avatar?: string;
   bio?: string;
-  location?: string;
+  location: string;
   phone?: string;
   dateOfBirth?: Date;
-  role: UserRole;
-  status: UserStatus;
+  role: 'citizen' | 'moderator' | 'admin' | 'super_admin';
+  status: 'active' | 'suspended' | 'banned' | 'deleted';
   emailVerified: boolean;
   emailVerificationToken?: string;
   passwordResetToken?: string;
@@ -33,69 +20,68 @@ export interface IUser extends Document {
   loginCount: number;
   createdAt: Date;
   updatedAt: Date;
+  comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
-const userSchema = new Schema<IUser>({
+const UserSchema = new Schema<IUser>({
   email: {
     type: String,
-    required: true,
+    required: [true, 'Email is required'],
     unique: true,
     lowercase: true,
-    trim: true
+    trim: true,
+    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
   },
-  passwordHash: {
+  password: {
     type: String,
-    required: true
+    required: [true, 'Password is required'],
+    minlength: [6, 'Password must be at least 6 characters long'],
+    select: false // Don't include password in queries by default
   },
   name: {
     type: String,
-    required: true,
-    trim: true
+    required: [true, 'Name is required'],
+    trim: true,
+    maxlength: [100, 'Name cannot exceed 100 characters']
   },
-  avatarUrl: {
-    type: String
+  avatar: {
+    type: String,
+    default: null
   },
   bio: {
     type: String,
-    maxlength: 500
+    maxlength: [500, 'Bio cannot exceed 500 characters']
   },
   location: {
     type: String,
+    required: [true, 'Location is required'],
     trim: true
   },
   phone: {
     type: String,
-    trim: true
+    match: [/^\+?[\d\s-()]+$/, 'Please enter a valid phone number']
   },
   dateOfBirth: {
     type: Date
   },
   role: {
     type: String,
-    enum: Object.values(UserRole),
-    default: UserRole.CITIZEN
+    enum: ['citizen', 'moderator', 'admin', 'super_admin'],
+    default: 'citizen'
   },
   status: {
     type: String,
-    enum: Object.values(UserStatus),
-    default: UserStatus.ACTIVE
+    enum: ['active', 'suspended', 'banned', 'deleted'],
+    default: 'active'
   },
   emailVerified: {
     type: Boolean,
     default: false
   },
-  emailVerificationToken: {
-    type: String
-  },
-  passwordResetToken: {
-    type: String
-  },
-  passwordResetExpires: {
-    type: Date
-  },
-  lastLoginAt: {
-    type: Date
-  },
+  emailVerificationToken: String,
+  passwordResetToken: String,
+  passwordResetExpires: Date,
+  lastLoginAt: Date,
   loginCount: {
     type: Number,
     default: 0
@@ -103,8 +89,8 @@ const userSchema = new Schema<IUser>({
 }, {
   timestamps: true,
   toJSON: {
-    transform: function(doc, ret) {
-      delete ret.passwordHash;
+    transform: (doc, ret) => {
+      delete ret.password;
       delete ret.emailVerificationToken;
       delete ret.passwordResetToken;
       delete ret.passwordResetExpires;
@@ -113,10 +99,35 @@ const userSchema = new Schema<IUser>({
   }
 });
 
-// Indexes
-userSchema.index({ email: 1 });
-userSchema.index({ status: 1 });
-userSchema.index({ role: 1 });
-userSchema.index({ createdAt: -1 });
+// Index for performance
+UserSchema.index({ email: 1 });
+UserSchema.index({ status: 1 });
+UserSchema.index({ role: 1 });
+UserSchema.index({ createdAt: -1 });
 
-export const User = mongoose.model<IUser>('User', userSchema); 
+// Hash password before saving
+UserSchema.pre('save', async function(next) {
+  // Only hash password if it's been modified
+  if (!this.isModified('password')) return next();
+  
+  try {
+    // Hash password with salt rounds of 12
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Compare password method
+UserSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
+// Static method to find by email
+UserSchema.statics.findByEmail = function(email: string) {
+  return this.findOne({ email: email.toLowerCase() });
+};
+
+export default mongoose.model<IUser>('User', UserSchema);
