@@ -9,6 +9,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { SearchProvider } from "./contexts/SearchContext";
 import { AuthProvider } from "./contexts/AuthContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
 import { AuthDialog } from "./components/AuthDialog";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
@@ -27,20 +28,22 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <SearchProvider>
-            <Layout>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/explore" element={<Explore />} />
-                <Route path="/my-reports" element={<MyReports />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/issue/:id" element={<Issue />} />
-                <Route path="/profile/:userId?" element={<Profile />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Layout>
-            <AuthDialog />
-          </SearchProvider>
+          <NotificationProvider>
+            <SearchProvider>
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/explore" element={<Explore />} />
+                  <Route path="/my-reports" element={<MyReports />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/issue/:id" element={<Issue />} />
+                  <Route path="/profile/:userId?" element={<Profile />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Layout>
+              <AuthDialog />
+            </SearchProvider>
+          </NotificationProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

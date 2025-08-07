@@ -1,13 +1,15 @@
-import { Home, Compass, FileText, Settings, LogOut } from "lucide-react";
+import { Home, Compass, FileText, Settings, LogOut, User } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
+import { Profiler } from "react";
 
 const navigation = [
   { name: "Home", href: "/", icon: Home },
   { name: "Explore Issues", href: "/explore", icon: Compass },
   { name: "My Reports", href: "/my-reports", icon: FileText },
-  { name: "Settings", href: "/settings", icon: Settings },
+  { name: "Profile", href: "/profile", icon: User },
+  // { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 export function Sidebar() {

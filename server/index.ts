@@ -9,6 +9,7 @@ import { connectToDatabase } from "./config/database";
 import authRoutes from "./routes/auth";
 import issuesRoutes from "./routes/issues";
 import categoriesRoutes from "./routes/categories";
+import notificationRoutes from "./routes/notifications";
 
 // Load environment variables
 dotenv.config();
@@ -46,6 +47,7 @@ connectToDatabase().catch(error => {
 app.use('/api/auth', authRoutes);
 app.use('/api/issues', issuesRoutes);
 app.use('/api/categories', categoriesRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

@@ -39,7 +39,7 @@ export function Header() {
         <div className="flex items-center space-x-2">
           {isAuthenticated ? (
             <>
-              <ReportIssueDialog>
+              {/* <ReportIssueDialog>
                 <Button className="gap-2 hidden sm:flex">
                   <Plus className="h-4 w-4" />
                   Report Issue
@@ -49,7 +49,7 @@ export function Header() {
                 <Button size="icon" className="sm:hidden">
                   <Plus className="h-4 w-4" />
                 </Button>
-              </ReportIssueDialog>
+              </ReportIssueDialog> */}
               <NotificationDropdown />
               <ProfileDropdown />
             </>

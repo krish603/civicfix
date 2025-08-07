@@ -120,9 +120,120 @@ router.get('/', optionalAuth, async (req: Request, res: Response) => {
   }
 });
 
+// Get issues reported by the current user
+router.get('/user', authenticate, async (req: Request, res: Response) => {
+  try {
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState !== 1) {
+      // Use mock data service
+      const userIssues = await mockDataService.getUserIssues(req.user._id);
+      return res.json({
+        success: true,
+        data: userIssues
+      });
+    }
+
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Build filter object
+    const filter: any = {
+      reportedBy: req.user._id
+    };
+
+    if (status) filter.status = status;
+
+    // Build sort object
+    const sort: any = {};
+    sort[sortBy as string] = sortOrder === 'desc' ? -1 : 1;
+
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Get user's issues with population
+    const issues = await Issue.find(filter)
+      .populate('reportedBy', 'name avatar')
+      .populate('categoryId', 'name iconName colorHex')
+      .sort(sort)
+      .skip(skip)
+      .limit(limitNum)
+      .lean();
+
+    // Get total count for pagination
+    const total = await Issue.countDocuments(filter);
+
+    // Get user's votes for these issues
+    const issueIds = issues.map(issue => issue._id);
+    const votes = await Vote.find({
+      userId: req.user._id,
+      issueId: { $in: issueIds }
+    });
+
+    const userVotes = votes.reduce((acc: any, vote: any) => {
+      acc[vote.issueId.toString()] = vote.voteType;
+      return acc;
+    }, {});
+
+    // Add user vote information to issues
+    const issuesWithVotes = issues.map(issue => ({
+      ...issue,
+      hasUserVoted: userVotes[issue._id.toString()] || null
+    }));
+
+    res.json({
+      success: true,
+      data: issuesWithVotes
+    });
+  } catch (error) {
+    console.error('Get user issues error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
 // Get single issue by ID
 router.get('/:id', optionalAuth, async (req: Request, res: Response) => {
   try {
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState !== 1) {
+      // Use mock data service
+      const issue = await mockDataService.getIssueById(req.params.id);
+      
+      if (!issue) {
+        return res.status(404).json({
+          success: false,
+          message: 'Issue not found'
+        });
+      }
+
+      // Increment view count
+      issue.viewsCount += 1;
+
+      // Set user vote based on authentication
+      let hasUserVoted = null;
+      if (req.user) {
+        hasUserVoted = issue.hasUserVoted;
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          issue: {
+            ...issue,
+            hasUserVoted
+          }
+        }
+      });
+    }
+
     const issue = await Issue.findById(req.params.id)
       .populate('reportedBy', 'name avatar location')
       .populate('categoryId', 'name iconName colorHex')
@@ -355,40 +466,33 @@ router.post('/:id/vote', authenticate, async (req: Request, res: Response) => {
       if (existingVote.voteType === voteType) {
         // Remove vote if same type
         await Vote.findByIdAndDelete(existingVote._id);
-
-        res.json({
-          success: true,
-          message: 'Vote removed',
-          data: {
-            hasUserVoted: null
-          }
-        });
       } else {
         // Update vote type
         existingVote.voteType = voteType;
         await existingVote.save();
-
-        res.json({
-          success: true,
-          message: 'Vote updated',
-          data: {
-            hasUserVoted: voteType
-          }
-        });
       }
     } else {
       // Create new vote
       const vote = new Vote({ userId, issueId, voteType });
       await vote.save();
-
-      res.json({
-        success: true,
-        message: 'Vote added',
-        data: {
-          hasUserVoted: voteType
-        }
-      });
     }
+
+    // Get updated vote counts
+    const upvotesCount = await Vote.countDocuments({ issueId, voteType: 'upvote' });
+    const downvotesCount = await Vote.countDocuments({ issueId, voteType: 'downvote' });
+    
+    // Get current user vote
+    const currentVote = await Vote.findOne({ userId, issueId });
+
+    res.json({
+      success: true,
+      message: 'Vote processed',
+      data: {
+        upvotesCount,
+        downvotesCount,
+        hasUserVoted: currentVote ? currentVote.voteType : null
+      }
+    });
   } catch (error) {
     console.error('Vote error:', error);
     res.status(500).json({
@@ -404,6 +508,17 @@ router.get('/:id/comments', optionalAuth, async (req: Request, res: Response) =>
     const { page = 1, limit = 20 } = req.query;
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
+
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState !== 1) {
+      // Use mock data service
+      const result = await mockDataService.getComments(req.params.id, pageNum, limitNum);
+      return res.json({
+        success: true,
+        data: result
+      });
+    }
+
     const skip = (pageNum - 1) * limitNum;
 
     const comments = await Comment.find({ 
@@ -460,6 +575,25 @@ router.post('/:id/comments', authenticate, async (req: Request, res: Response) =
       });
     }
 
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState !== 1) {
+      // Use mock data service
+      const comment = await mockDataService.addComment(
+        req.params.id, 
+        content.trim(), 
+        req.user._id, 
+        req.user.name
+      );
+      
+      return res.status(201).json({
+        success: true,
+        message: 'Comment added successfully',
+        data: {
+          comment
+        }
+      });
+    }
+
     // Check if issue exists
     const issue = await Issue.findById(req.params.id);
     if (!issue) {
@@ -510,6 +644,109 @@ router.post('/:id/comments', authenticate, async (req: Request, res: Response) =
       });
     }
 
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Update an issue (only by the reporter or admin)
+router.patch('/:id', authenticate, async (req: Request, res: Response) => {
+  try {
+    const issue = await Issue.findById(req.params.id);
+    
+    if (!issue) {
+      return res.status(404).json({
+        success: false,
+        message: 'Issue not found'
+      });
+    }
+
+    // Check if user is the reporter or an admin
+    if (issue.reportedBy.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only update your own issues'
+      });
+    }
+
+    // Update allowed fields
+    const allowedUpdates = ['title', 'description', 'priority', 'tags', 'images'];
+    const updates: any = {};
+    
+    allowedUpdates.forEach(field => {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    });
+
+    const updatedIssue = await Issue.findByIdAndUpdate(
+      req.params.id,
+      updates,
+      { new: true, runValidators: true }
+    ).populate('reportedBy', 'name avatar')
+     .populate('categoryId', 'name iconName colorHex');
+
+    res.json({
+      success: true,
+      message: 'Issue updated successfully',
+      data: {
+        issue: updatedIssue
+      }
+    });
+  } catch (error: any) {
+    console.error('Update issue error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map((err: any) => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: messages
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Delete an issue (only by the reporter or admin)
+router.delete('/:id', authenticate, async (req: Request, res: Response) => {
+  try {
+    const issue = await Issue.findById(req.params.id);
+    
+    if (!issue) {
+      return res.status(404).json({
+        success: false,
+        message: 'Issue not found'
+      });
+    }
+
+    // Check if user is the reporter or an admin
+    if (issue.reportedBy.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only delete your own issues'
+      });
+    }
+
+    // Delete related data (votes, comments)
+    await Vote.deleteMany({ issueId: req.params.id });
+    await Comment.deleteMany({ issueId: req.params.id });
+    
+    // Delete the issue
+    await Issue.findByIdAndDelete(req.params.id);
+
+    res.json({
+      success: true,
+      message: 'Issue deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete issue error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'

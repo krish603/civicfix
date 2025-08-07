@@ -7,6 +7,26 @@ interface ApiResponse<T = any> {
   errors?: string[];
 }
 
+interface Notification {
+  _id: string;
+  type: 'status_update' | 'comment' | 'upvote' | 'downvote' | 'system' | 'mention';
+  title: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+  actionUrl?: string;
+  issueId?: string;
+  commentId?: string;
+  userId?: string;
+  relatedUserId?: string;
+  metadata?: {
+    issueTitle?: string;
+    commentContent?: string;
+    upvoteCount?: number;
+    downvoteCount?: number;
+  };
+}
+
 class ApiClient {
   private baseURL: string;
 
@@ -41,7 +61,7 @@ class ApiClient {
     return data;
   }
 
-  async get<T>(endpoint: string): Promise<ApiResponse<T>> {
+  async get<T = any>(endpoint: string): Promise<ApiResponse<T>> {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'GET',
       headers: this.getHeaders(),
@@ -50,7 +70,7 @@ class ApiClient {
     return this.handleResponse<T>(response);
   }
 
-  async post<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+  async post<T = any>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'POST',
       headers: this.getHeaders(),
@@ -60,7 +80,7 @@ class ApiClient {
     return this.handleResponse<T>(response);
   }
 
-  async patch<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+  async patch<T = any>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'PATCH',
       headers: this.getHeaders(),
@@ -70,7 +90,7 @@ class ApiClient {
     return this.handleResponse<T>(response);
   }
 
-  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
+  async delete<T = any>(endpoint: string): Promise<ApiResponse<T>> {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'DELETE',
       headers: this.getHeaders(),
@@ -107,113 +127,31 @@ export const issuesApi = {
   },
   
   getIssue: (id: string) =>
-    apiClient.get(`/issues/${id}`),
+    apiClient.get<{ issue: any }>(`/issues/${id}`),
   
   createIssue: (data: any) =>
     apiClient.post('/issues', data),
   
   getComments: (issueId: string, page = 1, limit = 20) =>
-    apiClient.get(`/issues/${issueId}/comments?page=${page}&limit=${limit}`),
+    apiClient.get<{ comments: any[]; pagination: any }>(`/issues/${issueId}/comments?page=${page}&limit=${limit}`),
   
   addComment: (issueId: string, content: string, parentId?: string) =>
-    apiClient.post(`/issues/${issueId}/comments`, { content, parentId }),
+    apiClient.post<{ comment: any }>(`/issues/${issueId}/comments`, { content, parentId }),
 
-  async getUserIssues() {
-    try {
-      const response = await fetch('/api/issues/user', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}` // Adjust based on your auth implementation
-        }
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch user issues');
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error fetching user issues:', error);
-      throw error;
-    }
-  },
+  getUserIssues: () =>
+    apiClient.get<any[]>('/issues/user'),
 
   // Vote on an issue
-  async voteOnIssue(issueId: string, voteType: 'upvote' | 'downvote') {
-    try {
-      const response = await fetch(`/api/issues/${issueId}/vote`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ voteType })
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to vote on issue');
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error voting on issue:', error);
-      throw error;
-    }
-  },
+  voteOnIssue: (issueId: string, voteType: 'upvote' | 'downvote') =>
+    apiClient.post<{ upvotesCount: number; downvotesCount: number; hasUserVoted: 'upvote' | 'downvote' | null }>(`/issues/${issueId}/vote`, { voteType }),
 
   // Delete an issue (only for issue owner)
-  async deleteIssue(issueId: string) {
-    try {
-      const response = await fetch(`/api/issues/${issueId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to delete issue');
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error deleting issue:', error);
-      throw error;
-    }
-  },
+  deleteIssue: (issueId: string) =>
+    apiClient.delete(`/issues/${issueId}`),
 
   // Update an existing issue
-  async updateIssue(issueId: string, issueData: any) {
-    try {
-      const response = await fetch(`/api/issues/${issueId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(issueData)
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to update issue');
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error updating issue:', error);
-      throw error;
-    }
-  }
+  updateIssue: (issueId: string, issueData: any) =>
+    apiClient.patch(`/issues/${issueId}`, issueData)
 };
 
 export const categoriesApi = {
@@ -222,6 +160,23 @@ export const categoriesApi = {
   
   getCategory: (id: string) =>
     apiClient.get(`/categories/${id}`),
+};
+
+export const notificationApi = {
+  getNotifications: () =>
+    apiClient.get<Notification[]>('/notifications'),
+  
+  markAsRead: (id: string) =>
+    apiClient.patch(`/notifications/${id}/read`),
+  
+  markAllAsRead: () =>
+    apiClient.patch('/notifications/read-all'),
+  
+  deleteNotification: (id: string) =>
+    apiClient.delete(`/notifications/${id}`),
+  
+  createNotification: (data: any) =>
+    apiClient.post('/notifications', data),
 };
 
 // Helper functions

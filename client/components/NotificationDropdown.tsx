@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, Check, X, Eye, Settings, MessageCircle, TrendingUp, AlertTriangle } from "lucide-react";
+import { Bell, Check, X, Eye, Settings, MessageCircle, TrendingUp, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import {
@@ -11,100 +11,79 @@ import {
   DropdownMenuItem,
 } from "./ui/dropdown-menu";
 import { ScrollArea } from "./ui/scroll-area";
-
-interface Notification {
-  id: string;
-  type: "status_update" | "comment" | "upvote" | "system";
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
-  actionUrl?: string;
-}
-
-const mockNotifications: Notification[] = [
-  {
-    id: "notif-1",
-    type: "status_update",
-    title: "Issue Status Updated",
-    message: "Your report 'Broken Street Light' is now in progress",
-    time: "2 minutes ago",
-    read: false,
-    actionUrl: "/issue/1"
-  },
-  {
-    id: "notif-2",
-    type: "comment",
-    title: "New Comment",
-    message: "Someone commented on your pothole report",
-    time: "1 hour ago",
-    read: false,
-    actionUrl: "/issue/2"
-  },
-  {
-    id: "notif-3",
-    type: "upvote",
-    title: "Your Report Got Upvoted",
-    message: "5 people upvoted your graffiti removal request",
-    time: "3 hours ago",
-    read: true,
-    actionUrl: "/issue/3"
-  },
-  {
-    id: "notif-4",
-    type: "system",
-    title: "Weekly Digest Available",
-    message: "Your community activity summary is ready",
-    time: "1 day ago",
-    read: true
-  },
-  {
-    id: "notif-5",
-    type: "status_update",
-    title: "Issue Resolved",
-    message: "The damaged crosswalk signal has been fixed",
-    time: "2 days ago",
-    read: true,
-    actionUrl: "/issue/4"
-  }
-];
+import { useNotifications, Notification } from "../contexts/NotificationContext";
+import { useNavigate } from "react-router-dom";
 
 const notificationIcons = {
   status_update: AlertTriangle,
   comment: MessageCircle,
   upvote: TrendingUp,
-  system: Settings
+  downvote: TrendingUp,
+  system: Settings,
+  mention: MessageCircle
 };
 
 const notificationColors = {
   status_update: "text-blue-500",
   comment: "text-green-500", 
   upvote: "text-purple-500",
-  system: "text-gray-500"
+  downvote: "text-red-500",
+  system: "text-gray-500",
+  mention: "text-orange-500"
 };
 
 export function NotificationDropdown() {
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const { 
+    notifications, 
+    unreadCount, 
+    loading, 
+    markAsRead, 
+    markAllAsRead, 
+    deleteNotification 
+  } = useNotifications();
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(notif => 
-        notif.id === id ? { ...notif, read: true } : notif
-      )
-    );
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hour${Math.floor(diffInMinutes / 60) > 1 ? 's' : ''} ago`;
+    
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notif => ({ ...notif, read: true }))
-    );
+  const handleNotificationClick = (notification: Notification) => {
+    if (!notification.read) {
+      markAsRead(notification._id);
+    }
+    
+    if (notification.actionUrl) {
+      navigate(notification.actionUrl);
+      setOpen(false);
+    }
   };
 
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(notif => notif.id !== id));
+  const handleMarkAsRead = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    markAsRead(id);
+  };
+
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    deleteNotification(id);
+  };
+
+  const handleMarkAllAsRead = () => {
+    markAllAsRead();
   };
 
   return (
@@ -132,7 +111,7 @@ export function NotificationDropdown() {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={markAllAsRead}
+                onClick={handleMarkAllAsRead}
                 className="text-xs h-6 px-2"
               >
                 Mark all read
@@ -149,7 +128,12 @@ export function NotificationDropdown() {
         {/* Notifications List */}
         <ScrollArea className="max-h-80">
           <div className="p-2">
-            {notifications.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Loading notifications...</p>
+              </div>
+            ) : notifications.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No notifications yet</p>
@@ -162,10 +146,11 @@ export function NotificationDropdown() {
                   
                   return (
                     <div
-                      key={notification.id}
-                      className={`p-3 rounded-lg hover:bg-muted/50 transition-colors ${
+                      key={notification._id}
+                      className={`p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer ${
                         !notification.read ? 'bg-muted/30' : ''
                       }`}
+                      onClick={() => handleNotificationClick(notification)}
                     >
                       <div className="flex items-start gap-3">
                         <div className={`mt-1 ${iconColor}`}>
@@ -184,7 +169,7 @@ export function NotificationDropdown() {
                                 {notification.message}
                               </p>
                               <p className="text-xs text-muted-foreground mt-1">
-                                {notification.time}
+                                {formatTime(notification.createdAt)}
                               </p>
                             </div>
                             
@@ -198,6 +183,7 @@ export function NotificationDropdown() {
                                     variant="ghost" 
                                     size="icon" 
                                     className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:opacity-100"
+                                    onClick={(e) => e.stopPropagation()}
                                   >
                                     <span className="sr-only">Options</span>
                                     ⋮
@@ -205,19 +191,19 @@ export function NotificationDropdown() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-40">
                                   {!notification.read && (
-                                    <DropdownMenuItem onClick={() => markAsRead(notification.id)}>
+                                    <DropdownMenuItem onClick={(e) => handleMarkAsRead(e, notification._id)}>
                                       <Check className="h-4 w-4 mr-2" />
                                       Mark as read
                                     </DropdownMenuItem>
                                   )}
                                   {notification.actionUrl && (
-                                    <DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleNotificationClick(notification)}>
                                       <Eye className="h-4 w-4 mr-2" />
                                       View details
                                     </DropdownMenuItem>
                                   )}
                                   <DropdownMenuItem 
-                                    onClick={() => deleteNotification(notification.id)}
+                                    onClick={(e) => handleDelete(e, notification._id)}
                                     className="text-destructive"
                                   >
                                     <X className="h-4 w-4 mr-2" />
@@ -242,7 +228,14 @@ export function NotificationDropdown() {
           <>
             <DropdownMenuSeparator />
             <div className="p-2">
-              <Button variant="ghost" className="w-full text-sm h-8">
+              <Button 
+                variant="ghost" 
+                className="w-full text-sm h-8"
+                onClick={() => {
+                  navigate('/notifications');
+                  setOpen(false);
+                }}
+              >
                 View All Notifications
               </Button>
             </div>
